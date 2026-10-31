@@ -5,7 +5,7 @@ import jwt
 from pwdlib import PasswordHash
 
 # Set SECRET_KEY in your environment for anything beyond local learning.
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me-dev-only-change-me")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 24
 

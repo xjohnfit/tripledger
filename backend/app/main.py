@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from .database import create_db_and_tables, get_session
 from .models import Trip, TripCreate, TripRead
-
+from .routers import auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -15,6 +15,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="TripLedger API", lifespan=lifespan)
+
+app.include_router(auth.router)
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
