@@ -35,6 +35,21 @@ class TripRead(TripBase):
     id: int
     total: float
 
+class TripUpdate(SQLModel):
+    """Every field optional, so PATCH can change just one thing."""
+
+    started_at: NaiveDatetime | None = None
+    platform: Platform | None = None
+    distance_mi: float | None = Field(default=None, gt=0, le=1000)
+    fare: float | None = Field(default=None, ge=0, le=10000)
+    tip: float | None = Field(default=None, ge=0, le=10000)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class TripPage(SQLModel):
+    items: list[TripRead]
+    total: int
+
 
 class Category(str, Enum):
     gas = "gas"
@@ -84,3 +99,18 @@ class UserRead(SQLModel):
 class Token(SQLModel):
     access_token: str
     token_type: str = "bearer"
+
+class DayTotal(SQLModel):
+    day: date
+    earnings: float
+
+
+class Summary(SQLModel):
+    start: date
+    end: date
+    earnings: float
+    trips: int
+    expenses: float
+    net: float
+    by_day: list[DayTotal]
+    expenses_by_category: dict[str, float]
