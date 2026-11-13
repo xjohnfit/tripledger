@@ -63,4 +63,6 @@ No frontend test runner is set up.
 
 ## Other files
 
+`design/` holds PNG exports of the five screens (login, dashboard, trips, add trip, expenses) from the Figma file "TripLedger screens" (`figma.com/design/g6y4sGSmMhx6spHVd7tx4P`, page "Screens"). Figma is the source of truth; `design/README.md` maps each PNG to its page in `src/pages/`.
+
 `.github/instructions/postman-*.instructions.md` are Copilot rules for generating Postman pre-request/post-response scripts (they apply only to Postman script files, not to the app code).
