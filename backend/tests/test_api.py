@@ -80,3 +80,35 @@ def test_trips_rejects_end_before_start(client, login):
     res = client.get("/trips", params={"start": "2026-11-13", "end": "2026-11-02"}, headers=headers)
     assert res.status_code == 422
     assert res.json()["detail"] == "end must be on or after start"
+
+
+def test_only_the_owner_can_delete_an_expense(client, login):
+    alice = login("alice@example.com")
+    bob = login("bob@example.com")
+    body = {"spent_on": "2026-11-13", "category": "gas", "amount": 40}
+    created = client.post("/expenses", json=body, headers=alice).json()
+
+    assert client.delete(f"/expenses/{created['id']}", headers=bob).status_code == 404
+    assert client.delete(f"/expenses/{created['id']}", headers=alice).status_code == 204
+    assert client.delete(f"/expenses/{created['id']}", headers=alice).status_code == 404
+
+
+def test_trip_routes_check_ownership(client, login):
+    alice = login("alice@example.com")
+    bob = login("bob@example.com")
+    trip_id = client.post("/trips", json=trip(notes="Airport"), headers=alice).json()["id"]
+    url = f"/trips/{trip_id}"
+
+    # Bob gets the same 404 from every route, as if the trip didn't exist.
+    assert client.get(url, headers=bob).status_code == 404
+    assert client.patch(url, json={"fare": 1}, headers=bob).status_code == 404
+    assert client.delete(url, headers=bob).status_code == 404
+
+    # Alice can update: total is recomputed, and notes is the one field null clears.
+    res = client.patch(url, json={"fare": 20, "notes": None}, headers=alice)
+    assert res.status_code == 200
+    assert res.json()["total"] == 22.0
+    assert res.json()["notes"] is None
+
+    assert client.delete(url, headers=alice).status_code == 204
+    assert client.get(url, headers=alice).status_code == 404

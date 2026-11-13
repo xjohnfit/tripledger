@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import Depends, APIRouter, HTTPException, Query, status
 from sqlmodel import col, select
 
 from ..deps import CurrentUser, SessionDep
@@ -40,10 +40,18 @@ def create_expense(data: ExpenseCreate, session: SessionDep, user: CurrentUser):
     return expense
 
 
-@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense(expense_id: int, session: SessionDep, user: CurrentUser):
+def get_owned_expense(expense_id: int, session: SessionDep, user: CurrentUser) -> Expense:
     expense = session.get(Expense, expense_id)
-    if not expense or expense.user_id != user.id:
+    # Same 404 for "missing" and "someone else's", so ids can't be probed.
+    if expense is None or expense.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense not found")
+    return expense
+
+
+OwnedExpense = Annotated[Expense, Depends(get_owned_expense)]
+
+
+@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_expense(expense: OwnedExpense, session: SessionDep):
     session.delete(expense)
     session.commit()
