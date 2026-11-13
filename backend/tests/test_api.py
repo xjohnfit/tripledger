@@ -74,3 +74,9 @@ def test_summary_net(client, login):
     assert data["expenses"] == 4.0
     assert data["net"] == 10.6
     assert data["trips"] == 1
+
+def test_trips_rejects_end_before_start(client, login):
+    headers = login()
+    res = client.get("/trips", params={"start": "2026-11-13", "end": "2026-11-02"}, headers=headers)
+    assert res.status_code == 422
+    assert res.json()["detail"] == "end must be on or after start"
