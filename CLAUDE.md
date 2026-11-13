@@ -60,3 +60,7 @@ No frontend test runner is set up.
 - `frontend/src/types.ts` mirrors the Pydantic `Read` models by hand. **When a model in `models.py` changes, update `types.ts` too.**
 - `frontend/src/api.ts` is the single fetch wrapper: base URL from `VITE_API_URL` (default `http://127.0.0.1:8000`; production plans `VITE_API_URL=/api` behind an Ingress), JWT in `localStorage` under `tripledger_token`, a global 401 handler (`setUnauthorizedHandler`, registered by `AuthProvider` so any 401 logs the user out), and FastAPI error bodies (string or 422 array) turned into an `ApiError` message.
 - The API client doesn't cover `GET/PATCH /trips/{id}` yet.
+
+## Other files
+
+`design/` holds PNG exports of the five screens (login, dashboard, trips, add trip, expenses) from the Figma file "TripLedger screens" (`figma.com/design/g6y4sGSmMhx6spHVd7tx4P`, page "Screens"). Figma is the source of truth; `design/README.md` maps each PNG to its page in `src/pages/`.
