@@ -1,9 +1,36 @@
-.DS_Store
+# One ignore file for the whole repo. Patterns without a leading "/"
+# match at any depth, so these cover backend/ and frontend/ too.
+
+# Secrets
 .env
+.env.*
+!.env.example
+*.local
+
+# Python (backend)
 .venv/
 __pycache__/
 *.pyc
-*.db
 .pytest_cache/
+.coverage
+htmlcov/
+
+# Local SQLite database
+*.db
+
+# Node / Vite (frontend)
 node_modules/
 dist/
+dist-ssr/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sw?
