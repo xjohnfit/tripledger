@@ -33,6 +33,9 @@ def list_trips(
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
     filters = [Trip.user_id == user.id]
+    if start and end and end < start:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "end must be on or after start")
+
     if platform:
         filters.append(Trip.platform == platform)
     if start:

@@ -33,6 +33,7 @@ def login(form: Annotated[OAuth2PasswordRequestForm, Depends()], session: Sessio
             "Wrong email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    assert user.id is not None
     return Token(access_token=create_access_token(user.id))
 
 

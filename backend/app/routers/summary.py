@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlmodel import func, select
 
 from ..deps import CurrentUser, SessionDep
-from ..models import DayTotal, Expense, Summary, Trip
+from ..models import Category, DayTotal, Expense, Summary, Trip
 
 router = APIRouter(tags=["summary"])
 
@@ -44,7 +44,7 @@ def get_summary(
         .where(Expense.user_id == user.id, Expense.spent_on >= start, Expense.spent_on <= end)
         .group_by(Expense.category)
     ).all()
-    by_category = {cat.value: round(total, 2) for cat, total in rows}
+    by_category = {Category(cat).value: round(total, 2) for cat, total in rows}
     expenses = round(sum(by_category.values()), 2)
 
     return Summary(
