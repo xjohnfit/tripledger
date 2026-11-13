@@ -44,10 +44,10 @@ You need Python 3.14 and Node.js.
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install "fastapi[standard]" sqlmodel "pwdlib[argon2]" PyJWT python-dotenv pytest httpx
+pip install -r requirements.txt
 ```
 
-There is no `requirements.txt` yet, so the line above is the dependency list.
+`requirements.txt` pins the direct dependencies to exact versions; pip installs what they depend on.
 
 Create `backend/.env` with a secret for signing tokens:
 
@@ -61,7 +61,7 @@ Start the dev server:
 fastapi dev app/main.py
 ```
 
-The API runs on http://127.0.0.1:8000, with interactive docs at http://127.0.0.1:8000/docs. The SQLite database (`backend/tripledger.db`) is created on first start.
+The API runs on <http://127.0.0.1:8000>, with interactive docs at <http://127.0.0.1:8000/docs>. The SQLite database (`backend/tripledger.db`) is created on first start.
 
 ### Frontend
 
@@ -73,7 +73,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The app calls the API at `http://127.0.0.1:8000` by default; set `VITE_API_URL` to point it elsewhere.
+Open <http://localhost:5173>. The app calls the API at `http://127.0.0.1:8000` by default; set `VITE_API_URL` to point it elsewhere.
 
 ## Scripts
 
@@ -88,21 +88,21 @@ Open http://localhost:5173. The app calls the API at `http://127.0.0.1:8000` by 
 
 Every route except register, login and `/health` needs an `Authorization: Bearer <token>` header. Users only ever see their own trips and expenses; another user's record returns 404.
 
-| Method | Path              | Notes                                                         |
-| ------ | ----------------- | ------------------------------------------------------------- |
-| POST   | `/auth/register`  | JSON body: email, password                                    |
-| POST   | `/auth/login`     | Form data (`username` = email, `password`); returns a JWT     |
-| GET    | `/auth/me`        | The logged-in user                                            |
-| GET    | `/trips`          | Filters: `platform`, `start`, `end`; paging: `limit`, `offset` |
-| POST   | `/trips`          | Create a trip                                                 |
-| GET    | `/trips/{id}`     | One trip                                                      |
-| PATCH  | `/trips/{id}`     | Partial update                                                |
-| DELETE | `/trips/{id}`     | Delete a trip                                                 |
-| GET    | `/expenses`       | Filters: `category`, `start`, `end`                           |
-| POST   | `/expenses`       | Create an expense                                             |
-| DELETE | `/expenses/{id}`  | Delete an expense                                             |
-| GET    | `/summary`        | Earnings, expenses and net for `start`–`end` (default: this Mon–Sun week) |
-| GET    | `/health`         | Health check                                                  |
+| Method | Path             | Notes                                                                     |
+| ------ | ---------------- | ------------------------------------------------------------------------- |
+| POST   | `/auth/register` | JSON body: email, password                                                |
+| POST   | `/auth/login`    | Form data (`username` = email, `password`); returns a JWT                 |
+| GET    | `/auth/me`       | The logged-in user                                                        |
+| GET    | `/trips`         | Filters: `platform`, `start`, `end`; paging: `limit`, `offset`            |
+| POST   | `/trips`         | Create a trip                                                             |
+| GET    | `/trips/{id}`    | One trip                                                                  |
+| PATCH  | `/trips/{id}`    | Partial update                                                            |
+| DELETE | `/trips/{id}`    | Delete a trip                                                             |
+| GET    | `/expenses`      | Filters: `category`, `start`, `end`                                       |
+| POST   | `/expenses`      | Create an expense                                                         |
+| DELETE | `/expenses/{id}` | Delete an expense                                                         |
+| GET    | `/summary`       | Earnings, expenses and net for `start`–`end` (default: this Mon–Sun week) |
+| GET    | `/health`        | Health check                                                              |
 
 ## Design
 

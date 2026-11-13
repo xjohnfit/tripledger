@@ -25,7 +25,7 @@ pytest tests/test_api.py::test_summary_net   # a single test
 
 Type checking: `pyrightconfig.json` at the repo root sets Pylance/pyright to `standard` mode for `backend/` (overriding the user-level `strict` VS Code setting, which flags every un-annotated pytest fixture and PyJWT/SQLModel's partially-unknown types). Run `npx pyright` from the repo root.
 
-There is no `requirements.txt`/`pyproject.toml` yet; dependencies live only in `.venv` (fastapi, sqlmodel, pwdlib, PyJWT, python-dotenv, pytest, httpx).
+Dependencies are in `backend/requirements.txt`: direct dependencies only, pinned with `==` (install with `pip install -r requirements.txt`). The test-only packages (`pytest`, `httpx`) are listed there too; the planned Docker image filters out `pytest`. When adding or upgrading a package, update its pin there.
 
 Frontend (run from `frontend/`):
 
