@@ -9,7 +9,8 @@ TripLedger: a ride-share driver's ledger. Drivers log trips (Uber/Lyft/direct; f
 This project deliberately uses a **Python/FastAPI backend**, not the default Express/Mongo stack from the global CLAUDE.md. Don't suggest migrating it.
 
 - `backend/`: FastAPI + SQLModel on SQLite (`backend/tripledger.db`, created at startup), JWT auth via PyJWT, password hashing via pwdlib.
-- `frontend/`: React 19 + TypeScript + Vite + Tailwind v4. Early stage: `App.tsx` only pings `/health`; the API client and types are written but no screens yet. `react-router` is installed but not wired up.
+- `frontend/`: React 19 + TypeScript + Vite + Tailwind v4, routed with `react-router` v8 (import from `'react-router'`, not `react-router-dom`). `App.tsx` holds the routes and a `RequireAuth` guard; `AuthProvider` (`auth.tsx`) + `useAuth` (`authContext.ts`) hold the logged-in user; shared UI pieces are in `components/ui.tsx`, the sidebar shell in `components/Layout.tsx`. Pages live in `src/pages/`: Login, Dashboard, Trips (filters + limit/offset pagination) and AddTrip work; Expenses is still a placeholder. Date/money formatting helpers are in `src/lib/format.ts`.
+- **Gotcha:** if Tailwind classes silently do nothing in dev while `npm run build` is fine, the Vite dev server is serving stale CSS (it missed files/folders created after it started). Restart `npm run dev` and hard-refresh.
 
 ## Commands
 
@@ -21,6 +22,8 @@ fastapi dev app/main.py              # dev server on http://127.0.0.1:8000, docs
 pytest                               # all tests (pytest.ini sets pythonpath=. and testpaths=tests)
 pytest tests/test_api.py::test_summary_net   # a single test
 ```
+
+Type checking: `pyrightconfig.json` at the repo root sets Pylance/pyright to `standard` mode for `backend/` (overriding the user-level `strict` VS Code setting, which flags every un-annotated pytest fixture and PyJWT/SQLModel's partially-unknown types). Run `npx pyright` from the repo root.
 
 There is no `requirements.txt`/`pyproject.toml` yet; dependencies live only in `.venv` (fastapi, sqlmodel, pwdlib, PyJWT, python-dotenv, pytest, httpx).
 
@@ -55,7 +58,7 @@ No frontend test runner is set up.
 ## Frontend ↔ backend contract
 
 - `frontend/src/types.ts` mirrors the Pydantic `Read` models by hand. **When a model in `models.py` changes, update `types.ts` too.**
-- `frontend/src/api.ts` is the single fetch wrapper: base URL from `VITE_API_URL` (default `http://127.0.0.1:8000`; production plans `VITE_API_URL=/api` behind an Ingress), JWT in `localStorage` under `tripledger_token`, a global 401 handler (`setUnauthorizedHandler`) meant to be registered by a future AuthProvider, and FastAPI error bodies (string or 422 array) turned into an `ApiError` message.
+- `frontend/src/api.ts` is the single fetch wrapper: base URL from `VITE_API_URL` (default `http://127.0.0.1:8000`; production plans `VITE_API_URL=/api` behind an Ingress), JWT in `localStorage` under `tripledger_token`, a global 401 handler (`setUnauthorizedHandler`, registered by `AuthProvider` so any 401 logs the user out), and FastAPI error bodies (string or 422 array) turned into an `ApiError` message.
 - The API client doesn't cover `GET/PATCH /trips/{id}` yet.
 
 ## Other files
