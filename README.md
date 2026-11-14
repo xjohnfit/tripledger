@@ -136,13 +136,13 @@ Every route except register, login and `/health` needs an `Authorization: Bearer
 
 The app is set up to run on a k3s server at <https://tripledger.codewithxjohn.com> (not live yet). Both parts are served from one domain: the Traefik Ingress sends `/api/*` to FastAPI and everything else to the React app.
 
-| File                           | What it does                                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `backend/Dockerfile`           | Python 3.14 image running uvicorn with `--root-path /api`, as a non-root user                  |
-| `frontend/Dockerfile`          | Builds the app with `VITE_API_URL=/api`, then serves `dist/` with nginx (`nginx.conf`)         |
-| `kubernetes/`                  | Deployments, Services, Ingress, a Traefik middleware that strips `/api`, cert-manager issuers  |
-| `.github/workflows/deploy.yml` | Tests and scans every PR; on `main`, builds and pushes the images, then deploys after approval |
-| `.github/dependabot.yml`       | Monthly PRs that update the pinned GitHub Actions, Docker base images and npm packages         |
+| File                           | What it does                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `backend/Dockerfile`           | Python 3.14 image running uvicorn with `--root-path /api`, as a non-root user                                                  |
+| `frontend/Dockerfile`          | Builds the app with `VITE_API_URL=/api`, then serves `dist/` with nginx (`nginx.conf`)                                         |
+| `kubernetes/`                  | Deployments (non-root, read-only filesystem), Services, Ingress, a Traefik middleware that strips `/api`, cert-manager issuers |
+| `.github/workflows/deploy.yml` | Tests and scans every PR; on `main`, builds and pushes the images, then deploys after approval                                 |
+| `.github/dependabot.yml`       | Monthly PRs that update the pinned GitHub Actions, Docker base images and npm packages                                         |
 
 To build the images locally:
 
