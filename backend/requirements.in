@@ -1,0 +1,11 @@
+# Runtime dependencies: direct only, pinned with ==.
+# Edit this file, then regenerate the lock files (README, "Dependencies"):
+#   uv pip compile requirements.in --universal --python-version 3.14 --generate-hashes -o requirements.txt
+#   uv pip compile requirements-dev.in --universal --python-version 3.14 --generate-hashes -o requirements-dev.txt
+
+fastapi[standard]==0.162.0
+sqlmodel==0.0.48
+pwdlib[argon2]==0.3.1
+PyJWT==2.15.1
+psycopg[binary]==3.3.9
+pydantic-settings==2.16.2

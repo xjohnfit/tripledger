@@ -45,10 +45,10 @@ You need Python 3.14 and Node.js.
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` pins the direct dependencies to exact versions; pip installs what they depend on.
+`requirements-dev.txt` is a lock file: every package, including the ones your dependencies pull in, is pinned to an exact version with a hash, so pip refuses anything that doesn't match. See [Dependencies](#dependencies) to add or upgrade one.
 
 Create `backend/.env` with a secret for signing tokens:
 
@@ -91,6 +91,27 @@ Open <http://localhost:5173>. The app calls the API at `http://127.0.0.1:8000` b
 | `frontend/` | `npm run typecheck` | Type-checks only (`tsc -b`), used by CI |
 | `frontend/` | `npm run lint`      | Lints with oxlint                       |
 
+## Dependencies
+
+The backend's dependencies are listed in two files you edit, and two lock files generated from them:
+
+| File                   | Edit it? | Contents                                                      |
+| ---------------------- | -------- | ------------------------------------------------------------- |
+| `requirements.in`      | Yes      | Packages the app uses, pinned with `==`                       |
+| `requirements-dev.in`  | Yes      | Test tools (pytest, httpx), on top of `requirements.in`       |
+| `requirements.txt`     | No       | Lock file for the Docker image: every package, with hashes    |
+| `requirements-dev.txt` | No       | Lock file for local dev and CI: the same, plus the test tools |
+
+To add or upgrade a package, change its line in a `.in` file, then regenerate both lock files from `backend/` (needs [uv](https://docs.astral.sh/uv/)) and reinstall:
+
+```bash
+uv pip compile requirements.in --universal --python-version 3.14 --generate-hashes -o requirements.txt
+uv pip compile requirements-dev.in --universal --python-version 3.14 --generate-hashes -o requirements-dev.txt
+pip install -r requirements-dev.txt
+```
+
+The Docker build and CI install with `--require-hashes --only-binary :all:`: only the exact files in the lock, and only prebuilt wheels, so no package runs setup code during install.
+
 ## API
 
 Every route except register, login and `/health` needs an `Authorization: Bearer <token>` header. Users only ever see their own trips and expenses; another user's record returns 404.
@@ -121,6 +142,7 @@ The app is set up to run on a k3s server at <https://tripledger.codewithxjohn.co
 | `frontend/Dockerfile`          | Builds the app with `VITE_API_URL=/api`, then serves `dist/` with nginx (`nginx.conf`)         |
 | `kubernetes/`                  | Deployments, Services, Ingress, a Traefik middleware that strips `/api`, cert-manager issuers  |
 | `.github/workflows/deploy.yml` | Tests and scans every PR; on `main`, builds and pushes the images, then deploys after approval |
+| `.github/dependabot.yml`       | Monthly PRs that update the pinned GitHub Actions, Docker base images and npm packages         |
 
 To build the images locally:
 
