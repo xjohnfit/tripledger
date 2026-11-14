@@ -1,3 +1,9 @@
+import os
+
+# Set before the app is imported: tests never need a real .env and never touch Neon.
+os.environ["SECRET_KEY"] = "test-secret-key-that-is-at-least-32-chars"
+os.environ["DATABASE_URL"] = "sqlite://"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
