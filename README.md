@@ -134,7 +134,7 @@ Every route except register, login and `/health` needs an `Authorization: Bearer
 
 ## Deployment
 
-The app is set up to run on a k3s server at <https://tripledger.codewithxjohn.com> (not live yet). Both parts are served from one domain: the Traefik Ingress sends `/api/*` to FastAPI and everything else to the React app.
+The app is set up to run on a k3s server at <https://tripledger.codewithxjohn.com> (also `www.`; not live yet). Both parts are served from one domain: the Traefik Ingress sends `/api/*` to FastAPI and everything else to the React app.
 
 | File                           | What it does                                                                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |

@@ -32,7 +32,28 @@ spec:
             name: ${APP_NAME}-frontend
             port:
               number: 80
+  # www.<domain> serves the same app (same routes as above), like the other apps
+  # on this cluster. Both names need DNS A records pointing at the server.
+  - host: www.${DOMAIN}
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: ${APP_NAME}-backend
+            port:
+              number: ${BACKEND_PORT}
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ${APP_NAME}-frontend
+            port:
+              number: 80
   tls:
+  # One certificate covering both names.
   - hosts:
     - ${DOMAIN}
+    - www.${DOMAIN}
     secretName: ${APP_NAME}-tls
