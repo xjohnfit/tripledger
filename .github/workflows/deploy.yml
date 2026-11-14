@@ -235,7 +235,6 @@ jobs:
           [ "$BACKEND_PORT" = 8000 ] || { echo "::error::BACKEND_PORT must be 8000, the port uvicorn listens on in backend/Dockerfile"; exit 1; }
           : "${DOMAIN:?Set the DOMAIN repository variable}"
           : "${HEALTH_CHECK_PATH:?Set the HEALTH_CHECK_PATH repository variable}"
-          : "${LETSENCRYPT_EMAIL:?Set the LETSENCRYPT_EMAIL repository variable}"
           mkdir -p rendered
           for f in kubernetes/*.yml; do
             envsubst < "$f" > "rendered/$(basename "$f")"
@@ -252,12 +251,17 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy to Kubernetes
+        env:
+          LETSENCRYPT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
         run: |
           # ClusterIssuers are cluster-wide and shared with the other apps on this cluster:
           # create them only if missing, never modify existing ones.
           for env in staging prod; do
-            kubectl get clusterissuer "letsencrypt-$env" >/dev/null 2>&1 \
-              || kubectl apply -f "rendered/cluster-issuer-$env.yml"
+            if ! kubectl get clusterissuer "letsencrypt-$env" >/dev/null 2>&1; then
+              # Only needed here, so the variable can stay unset on a cluster that has them.
+              : "${LETSENCRYPT_EMAIL:?letsencrypt-$env is missing: set the LETSENCRYPT_EMAIL repository variable}"
+              kubectl apply -f "rendered/cluster-issuer-$env.yml"
+            fi
           done
           # Middleware before the Deployments: if the cluster rejects it (e.g. Traefik v2 API group),
           # the job stops before any Deployment changes.
