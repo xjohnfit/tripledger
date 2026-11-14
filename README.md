@@ -1,5 +1,7 @@
 # TripLedger
 
+**Live:** <https://tripledger.codewithxjohn.com>
+
 A ledger for ride-share drivers. Log trips (Uber, Lyft or direct: fare, tip, distance) and expenses (gas, maintenance, tolls, other), then see earnings, expenses and net for the week.
 
 ![Dashboard design](design/dashboard.png)
@@ -134,7 +136,7 @@ Every route except register, login and `/health` needs an `Authorization: Bearer
 
 ## Deployment
 
-The app is set up to run on a k3s server at <https://tripledger.codewithxjohn.com> (also `www.`; not live yet). Both parts are served from one domain: the Traefik Ingress sends `/api/*` to FastAPI and everything else to the React app.
+The app runs on a k3s server at <https://tripledger.codewithxjohn.com> (also `www.`), first deployed 2026-11-14. Every push to `main` that touches code runs the pipeline; the deploy step waits for approval in the `production` environment. Both parts are served from one domain: the Traefik Ingress sends `/api/*` to FastAPI and everything else to the React app.
 
 | File                           | What it does                                                                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
