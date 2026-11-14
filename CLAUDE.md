@@ -33,6 +33,7 @@ Frontend (run from `frontend/`):
 ```bash
 npm run dev       # Vite on http://localhost:5173
 npm run build     # tsc -b (TypeScript 7) then vite build
+npm run typecheck # tsc -b only (CI runs it as its own step)
 npm run lint      # oxlint (config in .oxlintrc.json), not eslint
 ```
 
@@ -62,6 +63,16 @@ No frontend test runner is set up.
 - `frontend/src/types.ts` mirrors the Pydantic `Read` models by hand. **When a model in `models.py` changes, update `types.ts` too.**
 - `frontend/src/api.ts` is the single fetch wrapper: base URL from `VITE_API_URL` (default `http://127.0.0.1:8000`; production plans `VITE_API_URL=/api` behind an Ingress), JWT in `localStorage` under `tripledger_token`, a global 401 handler (`setUnauthorizedHandler`, registered by `AuthProvider` so any 401 logs the user out), and FastAPI error bodies (string or 422 array) turned into an `ApiError` message.
 - The API client doesn't cover `GET/PATCH /trips/{id}` yet.
+
+## Deployment
+
+Target: k3s on a VPS, at `tripledger.codewithxjohn.com` (not live yet). Adapted from `~/Documents/Builds/react-fastapi-k3s-deployment-guide`.
+
+- `backend/Dockerfile` (python:3.14-slim, non-root UID 1001) runs `uvicorn --root-path /api`. `frontend/Dockerfile` builds with `VITE_API_URL=/api` and serves `dist/` from nginx on port 5173.
+- `kubernetes/*.yml` are templates: `${APP_NAME}`, `${DOMAIN}`, etc. are filled by `envsubst` in `.github/workflows/deploy.yml` from repo variables and secrets (`DATABASE_URL` and `SECRET_KEY` become the `${APP_NAME}-secrets` k8s Secret). A new manifest file also needs a `kubectl apply` line in the workflow's deploy step.
+- **Gotcha: `/api` must be stripped before it reaches FastAPI.** Uvicorn (0.54) adds `--root-path` back onto every request path, so if the Ingress forwarded `/api/health` unchanged, FastAPI would see `/api/api/health` and return 404. `kubernetes/middleware-strip-api.yml` (Traefik `StripPrefix`) strips it, and the Ingress uses it through the `router.middlewares` annotation. Health probes hit `/health` on the pod directly.
+- The Docker `HEALTHCHECK`s use `127.0.0.1`, not `localhost`: in Alpine, `localhost` resolves to `::1`, and nginx listens on IPv4 only.
+- To test locally like production, run both images plus a proxy that sends `/api/*` to the backend with the prefix stripped (e.g. Caddy `handle_path /api*`) and everything else to the frontend.
 
 ## Other files
 
