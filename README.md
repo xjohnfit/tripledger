@@ -6,12 +6,12 @@ A ledger for ride-share drivers. Log trips (Uber, Lyft or direct: fare, tip, dis
 
 ## Stack
 
-| Part     | Tech                                                                 |
-| -------- | -------------------------------------------------------------------- |
-| Backend  | Python 3.14, FastAPI, SQLModel, PyJWT, pwdlib (Argon2)               |
-| Database | Postgres on Neon (production), SQLite for local dev and tests        |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router v8         |
-| Tooling  | pytest + httpx (API tests), pyright (types), oxlint (frontend lint)  |
+| Part     | Tech                                                                |
+| -------- | ------------------------------------------------------------------- |
+| Backend  | Python 3.14, FastAPI, SQLModel, PyJWT, pwdlib (Argon2)              |
+| Database | Postgres on Neon (production), SQLite for local dev and tests       |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router v8        |
+| Tooling  | pytest + httpx (API tests), pyright (types), oxlint (frontend lint) |
 
 ## Project layout
 
@@ -45,10 +45,10 @@ You need Python 3.14 and Node.js.
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` pins the direct dependencies to exact versions; pip installs what they depend on.
+`requirements-dev.txt` is a lock file: every package, including the ones your dependencies pull in, is pinned to an exact version with a hash, so pip refuses anything that doesn't match. See [Dependencies](#dependencies) to add or upgrade one.
 
 Create `backend/.env` with a secret for signing tokens:
 
@@ -56,10 +56,10 @@ Create `backend/.env` with a secret for signing tokens:
 echo "SECRET_KEY=$(openssl rand -hex 32)" > .env
 ```
 
-| Variable       | Required | What it does                                                                                       |
-| -------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `SECRET_KEY`   | Yes      | Signs login tokens. At least 32 characters; the app refuses to start without it.                   |
-| `DATABASE_URL` | No       | Postgres connection string (e.g. from Neon). Without it, the app uses a local SQLite file.         |
+| Variable       | Required | What it does                                                                               |
+| -------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `SECRET_KEY`   | Yes      | Signs login tokens. At least 32 characters; the app refuses to start without it.           |
+| `DATABASE_URL` | No       | Postgres connection string (e.g. from Neon). Without it, the app uses a local SQLite file. |
 
 Start the dev server:
 
@@ -83,12 +83,34 @@ Open <http://localhost:5173>. The app calls the API at `http://127.0.0.1:8000` b
 
 ## Scripts
 
-| Where       | Command          | What it does                                  |
-| ----------- | ---------------- | --------------------------------------------- |
-| `backend/`  | `pytest`         | Runs the API tests                            |
-| repo root   | `npx pyright`    | Type-checks the backend                       |
-| `frontend/` | `npm run build`  | Type-checks and builds for production         |
-| `frontend/` | `npm run lint`   | Lints with oxlint                             |
+| Where       | Command             | What it does                            |
+| ----------- | ------------------- | --------------------------------------- |
+| `backend/`  | `pytest`            | Runs the API tests                      |
+| repo root   | `npx pyright`       | Type-checks the backend                 |
+| `frontend/` | `npm run build`     | Type-checks and builds for production   |
+| `frontend/` | `npm run typecheck` | Type-checks only (`tsc -b`), used by CI |
+| `frontend/` | `npm run lint`      | Lints with oxlint                       |
+
+## Dependencies
+
+The backend's dependencies are listed in two files you edit, and two lock files generated from them:
+
+| File                   | Edit it? | Contents                                                      |
+| ---------------------- | -------- | ------------------------------------------------------------- |
+| `requirements.in`      | Yes      | Packages the app uses, pinned with `==`                       |
+| `requirements-dev.in`  | Yes      | Test tools (pytest, httpx), on top of `requirements.in`       |
+| `requirements.txt`     | No       | Lock file for the Docker image: every package, with hashes    |
+| `requirements-dev.txt` | No       | Lock file for local dev and CI: the same, plus the test tools |
+
+To add or upgrade a package, change its line in a `.in` file, then regenerate both lock files from `backend/` (needs [uv](https://docs.astral.sh/uv/)) and reinstall:
+
+```bash
+uv pip compile requirements.in --universal --python-version 3.14 --generate-hashes -o requirements.txt
+uv pip compile requirements-dev.in --universal --python-version 3.14 --generate-hashes -o requirements-dev.txt
+pip install -r requirements-dev.txt
+```
+
+The Docker build and CI install with `--require-hashes --only-binary :all:`: only the exact files in the lock, and only prebuilt wheels, so no package runs setup code during install.
 
 ## API
 
@@ -109,6 +131,25 @@ Every route except register, login and `/health` needs an `Authorization: Bearer
 | DELETE | `/expenses/{id}` | Delete an expense                                                         |
 | GET    | `/summary`       | Earnings, expenses and net for `start`–`end` (default: this Mon–Sun week) |
 | GET    | `/health`        | Health check                                                              |
+
+## Deployment
+
+The app is set up to run on a k3s server at <https://tripledger.codewithxjohn.com> (also `www.`; not live yet). Both parts are served from one domain: the Traefik Ingress sends `/api/*` to FastAPI and everything else to the React app.
+
+| File                           | What it does                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `backend/Dockerfile`           | Python 3.14 image running uvicorn with `--root-path /api`, as a non-root user                                                  |
+| `frontend/Dockerfile`          | Builds the app with `VITE_API_URL=/api`, then serves `dist/` with nginx (`nginx.conf`)                                         |
+| `kubernetes/`                  | Deployments (non-root, read-only filesystem), Services, Ingress, a Traefik middleware that strips `/api`, cert-manager issuers |
+| `.github/workflows/deploy.yml` | Tests and scans every PR; on `main`, builds and pushes the images, then deploys after approval                                 |
+| `.github/dependabot.yml`       | Monthly PRs that update the pinned GitHub Actions, Docker base images and npm packages                                         |
+
+To build the images locally:
+
+```bash
+docker build -t tripledger-backend backend
+docker build -t tripledger-frontend frontend
+```
 
 ## Design
 

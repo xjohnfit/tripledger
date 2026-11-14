@@ -1,0 +1,294 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # ---- Python: install, run pytest ----
+  test-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # Keep in sync with the backend Dockerfile's FROM python:X-slim
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+      # Hashed lock file, wheels only: no unpinned packages and no setup.py runs.
+      - run: "pip install --require-hashes --only-binary :all: -r requirements-dev.txt"
+      - run: pytest
+
+  # ---- React: lint, type-check, build ----
+  # `vite build` does not type-check, so `typecheck` (tsc) runs as its own step.
+  test-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      # No package install scripts (the only one in the lock file, fsevents, is macOS-only).
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  trivy-fs-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run Trivy filesystem scan
+        # Check https://github.com/aquasecurity/trivy-action/tags for the current release.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          scanners: 'vuln,secret,misconfig'
+          exit-code: '0'
+      - name: Upload results to the Security tab
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test-backend, test-frontend, trivy-fs-scan]
+    # workflow_dispatch must be listed or manual runs skip this job silently.
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    env:
+      BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.APP_NAME }}-backend
+      FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.APP_NAME }}-frontend
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.IMAGE_TAG }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute image tag
+        id: image-tag
+        # Run ID and attempt make every run's tag unique, so a rerun on the same commit
+        # still changes the Pod template and Kubernetes rolls out the new images.
+        run: echo "IMAGE_TAG=main-$(git rev-parse --short HEAD)-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=raw,value=${{ steps.image-tag.outputs.IMAGE_TAG }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./backend
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=raw,value=${{ steps.image-tag.outputs.IMAGE_TAG }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./frontend
+          push: true
+          provenance: true
+          sbom: true
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
+
+  scan-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build-and-push]
+    env:
+      BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.APP_NAME }}-backend
+      FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.APP_NAME }}-frontend
+    steps:
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.BACKEND_IMAGE }}:${{ needs.build-and-push.outputs.image-tag }}
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ needs.build-and-push.outputs.image-tag }}
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-and-push, scan-images]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      APP_NAME: ${{ vars.APP_NAME }}
+      # Every namespaced manifest and the Ingress's middleware reference use this.
+      # The default namespace matches the other apps on this cluster.
+      K8S_NAMESPACE: default
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
+        with:
+          version: 'v1.34.13' # within one minor version of the server: k3s v1.34.6 (2026-11)
+
+      - name: Set up kubeconfig
+        # The secret comes in as an env var, not ${{ }} inside the script, so its
+        # contents are never pasted into the shell code itself.
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBECONFIG_B64" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          # Later kubectl commands (secret, rollout, get) then act on the same namespace.
+          kubectl config set-context --current --namespace="$K8S_NAMESPACE"
+
+      - name: Render Kubernetes manifests
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+          BACKEND_PORT: ${{ vars.BACKEND_PORT }}
+          DOMAIN: ${{ vars.DOMAIN }}
+          HEALTH_CHECK_PATH: ${{ vars.HEALTH_CHECK_PATH }}
+          LETSENCRYPT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
+        run: |
+          : "${APP_NAME:?Set the APP_NAME repository variable}"
+          : "${K8S_NAMESPACE:?Set K8S_NAMESPACE in the deploy job env}"
+          : "${BACKEND_PORT:?Set the BACKEND_PORT repository variable}"
+          [ "$BACKEND_PORT" = 8000 ] || { echo "::error::BACKEND_PORT must be 8000, the port uvicorn listens on in backend/Dockerfile"; exit 1; }
+          : "${DOMAIN:?Set the DOMAIN repository variable}"
+          : "${HEALTH_CHECK_PATH:?Set the HEALTH_CHECK_PATH repository variable}"
+          mkdir -p rendered
+          for f in kubernetes/*.yml; do
+            envsubst < "$f" > "rendered/$(basename "$f")"
+          done
+
+      - name: Create or update Kubernetes secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: |
+          kubectl create secret generic "$APP_NAME-secrets" \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=SECRET_KEY="$SECRET_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy to Kubernetes
+        env:
+          LETSENCRYPT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
+        run: |
+          # ClusterIssuers are cluster-wide and shared with the other apps on this cluster:
+          # create them only if missing, never modify existing ones.
+          for env in staging prod; do
+            if ! kubectl get clusterissuer "letsencrypt-$env" >/dev/null 2>&1; then
+              # Only needed here, so the variable can stay unset on a cluster that has them.
+              : "${LETSENCRYPT_EMAIL:?letsencrypt-$env is missing: set the LETSENCRYPT_EMAIL repository variable}"
+              kubectl apply -f "rendered/cluster-issuer-$env.yml"
+            fi
+          done
+          # Middleware before the Deployments: if the cluster rejects it (e.g. Traefik v2 API group),
+          # the job stops before any Deployment changes.
+          kubectl apply -f rendered/middleware-strip-api.yml
+          kubectl apply -f rendered/backend-service.yml
+          kubectl apply -f rendered/frontend-service.yml
+          kubectl apply -f rendered/backend-deployment.yml
+          kubectl apply -f rendered/frontend-deployment.yml
+          kubectl apply -f rendered/ingress.yml
+
+      - name: Wait for rollout, roll back automatically on failure
+        run: |
+          # Check both Deployments, roll back each one that failed, then fail the job.
+          failed=0
+          for part in backend frontend; do
+            deploy="deployment/$APP_NAME-$part"
+            if ! kubectl rollout status "$deploy" --timeout=5m; then
+              echo "::error::$deploy did not roll out; rolling back"
+              failed=1
+              { kubectl rollout undo "$deploy" && kubectl rollout status "$deploy" --timeout=5m; } \
+                || echo "::error::rollback of $deploy did not finish (no previous revision on a first deploy)"
+            fi
+          done
+          exit "$failed"
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -l "app=$APP_NAME-backend"
+          kubectl get pods -l "app=$APP_NAME-frontend"
+          kubectl get ingress "$APP_NAME-ingress"

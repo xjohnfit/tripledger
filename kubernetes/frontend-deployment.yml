@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_NAME}-frontend
+  namespace: ${K8S_NAMESPACE}
+  labels:
+    app: ${APP_NAME}-frontend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: ${APP_NAME}-frontend
+  template:
+    metadata:
+      labels:
+        app: ${APP_NAME}-frontend
+    spec:
+      automountServiceAccountToken: false
+      # Pod-wide defaults: non-root user/group 10001 (matches the Dockerfile) and the
+      # container runtime's default seccomp profile (blocks unusual system calls).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: frontend
+        image: ${DOCKERHUB_USERNAME}/${APP_NAME}-frontend:${IMAGE_TAG}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5173
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          # The image can't be modified at runtime; writable paths are the emptyDir volumes below.
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "5m"
+            ephemeral-storage: "64Mi"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+            # Disk for logs and the emptyDir volumes, so a runaway write can't fill the node.
+            ephemeral-storage: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5173
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5173
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+      - name: nginx-cache
+        emptyDir:
+          sizeLimit: 64Mi

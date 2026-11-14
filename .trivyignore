@@ -1,0 +1,10 @@
+# Trivy findings accepted on purpose. Each needs a reason.
+
+# Restrict container images to trusted registries: enforced by a cluster-wide
+# admission policy (e.g. Kyverno), not something a Deployment manifest can set.
+KSV-0125
+
+# Workloads in the default namespace: deliberate, all apps on this cluster live
+# there. Names are prefixed with APP_NAME, and every manifest sets its namespace
+# from K8S_NAMESPACE in deploy.yml, so moving later is a one-line change.
+KSV-0110
