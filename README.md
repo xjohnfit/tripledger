@@ -8,7 +8,8 @@ A ledger for ride-share drivers. Log trips (Uber, Lyft or direct: fare, tip, dis
 
 | Part     | Tech                                                                 |
 | -------- | -------------------------------------------------------------------- |
-| Backend  | Python 3.14, FastAPI, SQLModel on SQLite, PyJWT, pwdlib (Argon2)     |
+| Backend  | Python 3.14, FastAPI, SQLModel, PyJWT, pwdlib (Argon2)               |
+| Database | Postgres on Neon (production), SQLite for local dev and tests        |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router v8         |
 | Tooling  | pytest + httpx (API tests), pyright (types), oxlint (frontend lint)  |
 
@@ -55,13 +56,18 @@ Create `backend/.env` with a secret for signing tokens:
 echo "SECRET_KEY=$(openssl rand -hex 32)" > .env
 ```
 
+| Variable       | Required | What it does                                                                                       |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `SECRET_KEY`   | Yes      | Signs login tokens. At least 32 characters; the app refuses to start without it.                   |
+| `DATABASE_URL` | No       | Postgres connection string (e.g. from Neon). Without it, the app uses a local SQLite file.         |
+
 Start the dev server:
 
 ```bash
 fastapi dev app/main.py
 ```
 
-The API runs on <http://127.0.0.1:8000>, with interactive docs at <http://127.0.0.1:8000/docs>. The SQLite database (`backend/tripledger.db`) is created on first start.
+The API runs on <http://127.0.0.1:8000>, with interactive docs at <http://127.0.0.1:8000/docs>. The tables are created on first start, in the SQLite file (`backend/tripledger.db`) or in Postgres.
 
 ### Frontend
 
